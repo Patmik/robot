@@ -1,72 +1,67 @@
-from Raspi_motorHAT import Raspi_MotorHAT
-from gpiozero import DistanceSensor
+from turtle import circle
+import pyfirmata
 import atexit
-import leds_led_shim
 from servos import Servos
-
-
+import time as time
 
 class Robot():
-    def __init__(self, motorhat_addr=0x6f):
-        # inizjalizzacja dnakładki seterownika silniików zanjduącej się po podanym adresem
-        self._mh = Raspi_MotoHAT(addr=motorhat_addr)
+    def __init__(self,arduino='/dev/ttyACM0'):
+        #inizjazliacja arduino
+        self._ard = pyfirmata.Arduino(arduino)
+
+        #zmienne dla każdego z silników      
         
-        #zmienne lokalne dla kazdego z silników
-        self.left_motor = self._mh.getMotor(1)
-        self.right_motor = self._mh.getMotor(2)
+        self.l_pwm = self._ard.get_pin('d:5:p')     #moc
+        self.l_dir=self._ard.get_pin('d:4:o')       #kierunek
+        self.r_pwm=self._ard.get_pin('d:6:p')       #moc
+        self.r_dir=self._ard.get_pin('d:9:o')       #kierunek
 
-        #inicjalizacja czujników
-        self.left_distance_sensor = DistanceSensor(echo=17, trigger =27, queue_len=2)
-        self.left_distance_sensor = DistanceSensor(echo=5, trigger =6, queue_len=2)
-        
-        #inicjalizacja paska LED
-        self.leds = leds_led_shim.Leds()
+        #ustawienie serwomotorów mechanizmu uchylno-obrotowego
+        self.servos = Servos(arduino='/dev/ttyACM0')
 
-        #Ustawienie serwomotorów mechanizmu uchylno-obrotowego
-        self.servos = Servos(addr=motorhat_addr)
-
-        #upewnien sie ze silniki sie zatrzymają gdy program przestanie działać
+        #upewnienie się ze silnisi się zatrzymają gdy prograzm przestanie działać
         atexit.register(self.stop_all)
-
+   
+    
     def convert_speed(self,speed):
-        #wybór jazdy
-        mode = Raspi_MotorHat.RELEASE
-        if speed > 0 :
-            mode = Raspi_MotorHAT.FORWORD
+        #wybor jazdy
+        mode = 1
+        if speed > 0:
+            mode = 1
         elif speed < 0:
-            mode = Raspi_MotorHAT.BACKWARD
+            mode = 0
 
-        #Przeskalowanie prędkości
-        output_speed = (abs(speed)*255) // 100
+        #przeskalowanie prędkości
+        output_speed = (abs(speed)*50)//100
         return mode, int(output_speed)
-
-
+    
     def set_left(self, speed):
-        mode , output_speed = self.convert_speed(speed)
-        self.left_motor.setSpeed(output_speed)
-        self.left_motor.run(mode)
-
+        mode, output_speed = self.convert_speed(speed)
+        self.l_pwm.write(output_speed)
+        self.l_dir.write(mode)
+    
     def set_right(self, speed):
-        mode , output_speed = self.convert_speed(speed)
-        self.right_motor.setSpeed(output_speed)
-        self.right_motor.run(mode)
+        mode, output_speed = self.convert_speed(speed)
+        self.r_pwm.write(output_speed)
+        self.r_dir.write(mode)
 
     def stop_motors(self):
-        self.left_motor.run(Raspi_MotoHAT.RELEASE)
-        self.right_motor.run(Raspi_MotoHAT.RELEASE) 
+        self.l_pwm.write(0)   
+        self.l_dir.write(1)      
+        self.r_pwm.write(0)     
+        self.r_dir.write(1)  
 
+
+    #serwomechanizmy
     def set_pan(self,angle):
-        self.servos.set_servo_angle(1,angle)
-
+        self.servos.set_servo_angle('servo1',angle)
+    
     def set_tilt(self,angle):
-        self.servos.set_servo_angle(0,angle)
+        self.servos.set_servo_angle('servo2',angle)
 
+    
     def stop_all(self):
         self.stop_motors()
-
-        #Wygaszenie wyświetlacza
-        self.leds.clear()
-        self.leds.show()
-
-        #Reset servomotorów
         self.servos.stop_all()
+
+
